@@ -1,20 +1,150 @@
-# Reproducible Research: Peer Assessment 1
-
+---
+title: "Reproducible Research: Peer Assessment 1"
+author: "Chunjin Feng"
+date: "Monday, August 11, 2014"
+output: html_document
+---
 
 ## Loading and preprocessing the data
 
-
+```{r,echo=TRUE}
+## import the data into R 
+activity<-read.csv("J:/Rwin/R/rr/activity.csv",header=TRUE)
+head(activity)
+## No need to process the data,for it is a clean dataset 
+```
 
 ## What is mean total number of steps taken per day?
 
+#### 1. We make a histogram of the total number of steps taken each day
+```{r,echo=TRUE}
+totalstep<-tapply(activity$steps,activity$date,sum,na.rm=TRUE)
+hist(totalstep,main="histogram of total number of steps", 
+     xlab="total number steps")
+```
 
+#### 2. Calculate and report the mean and median total number of steps taken per day
+```{r,echo=TRUE}
+## Calculate the mean
+stepmean<-tapply(activity$steps,activity$date,mean,na.rm=TRUE)
+stepmean
+## Calculate the median
+stepmedian<-tapply(activity$steps,activity$date,median,na.rm=TRUE)
+stepmedian
+```
 
 ## What is the average daily activity pattern?
 
+#### 1.Make a time series plot of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)
 
+```{r,echo=TRUE}
+intervalmean<- tapply(activity$steps,activity$interval,mean,na.rm=TRUE)
+xlabname<- as.numeric(names(intervalmean))
+plot(intervalmean, type="l",main="5-minute interval VS  average number of steps", xaxt="n", xlab="5-Minute Interval", ylab="Average Number of Steps")
+axis(1,at=seq(1,288,60), labels=xlabname[seq(1,288,60)])
+```
+
+#### 2.Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+
+You will know that the interval of  `r names(which.max(intervalmean))`
+contains the maximum average number of steps.
+
+```{r,echo=TRUE}
+intervalmean[which.max(intervalmean)]
+```
 
 ## Imputing missing values
 
+Note that there are a number of days/intervals where there are missing values (coded as NA). The presence of missing days may introduce bias into some calculations or summaries of the data.
+
+#### 1.Calculate and report the total number of missing values in the dataset 
+
+```{r,echo=TRUE}
+sum(is.na(activity))
+## for how many rows have the missing value,we can use na.omit command
+nrow(activity)-nrow(na.omit(activity))
+```
+  We find that these two numbers are the same.
+
+##### 2.Devise a strategy for filling in all of the missing values in the dataset. 
+
+    we use the mean for that 5-minute interval to input the missing value,for if we use the mean for that day ,but that day contains all missing values,in this way,we cannot input the missing values.Since the 5-minute interval value does not miss too many ,we can take this measure.
+
+#### 3.Create a new dataset that is equal to the original dataset but with the missing data filled in.
+
+```{r,echo=TRUE}
+## We construct a new column to indicate row number of the missing value
+activity$number<-1:nrow(activity)
+## we abstract the missing value rows
+zz<-activity[is.na(activity$steps),-1]
+## contruct a new dataframe of 5-minute interval mean 
+intervaldf<-data.frame(interval=xlabname,steps=intervalmean)
+## imputing the missing values
+fullvalue<-merge(zz,intervaldf,by="interval",all=TRUE)
+##check the missing values
+sum(is.na(fullvalue))
+## Imputing the missing values into the original dataset
+activity$steps[fullvalue$number]<- fullvalue$steps
+## delete the column of indicating the missing values numbers
+activity2<-activity[,-4]
+##Create a new dataset that is equal to the original dataset but with the missing data filled in.
+write.csv(activity2,"activity2.csv",row.names=F)
+```
+
+#### 4.Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day. 
+
+```{r,echo=TRUE}
+totalstep2<-tapply(activity2$steps,activity2$date,sum)
+hist(totalstep2,main="histogram of total number of steps taken each day",xlab="total number steps")
+## calculate the new mean
+stepmean2<-tapply(activity2$steps,activity2$date,mean)
+stepmean2
+## calculate the new median
+stepmedian2<-tapply(activity2$steps,activity2$date,median)
+stepmedian2
+```
+
+    From above,we can see the new mean and median are different from the mean and median of missing values.And the histogram drew can also shows that the data are inclined into normal distribution.
+Imputing missing data do have an influence on the distribution of the data.
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+```{r,echo=TRUE}
+## to draw the plot ,we will use lattice package
+library(lattice)
+Sys.setlocale("LC_TIME", "C")
+ttt<-strptime(activity2$date,"%Y-%m-%d")
+## use the weekdays function ,changing the date into weekdays
+day<-weekdays(ttt)
+## change "Sunday" and"weekday" into "weekend"
+day[day %in% c("Sunday","Saturday")]<-"weekend"
+## the rest of them will be "weekday""
+day[day !="weekend"]<-"weekday"
+## change the day variable into factor in order to split
+activity2$day<-as.factor(day)
+## split the activity2,get a list of two dataframe,one is "weekday"",the other is "weekend""
+day.split<-split(activity2,activity2$day)
+## calculate each interval's mean value
+meanstep1<-tapply(day.split[[1]]$steps,day.split[[1]]$interval,mean)
+meanstep2<-tapply(day.split[[2]]$steps,day.split[[2]]$interval,mean)
+## contruct a new dataframe for plotting
+final.week<-data.frame(meanstep=c(meanstep1,meanstep2),
+        interval=rep(rownames(meanstep2),2),
+        day=rep(c("weekday","weekend"),each=length(meanstep2)),
+        stringsAsFactors =FALSE)
+```
+
+```{r lattice}
+xyplot(meanstep~as.numeric(interval)|factor(day),type="a",data=final.week,layout=c(1,2), xlab="",ylab="Number of Steps")
+
+mean(meanstep1)
+mean(meanstep2)
+
+```
+
+From the above picture,we can know the maximun value of the steps was in weekdays not at weekend.But the average of steps at weekend (`r mean(meanstep2)`) is higher than the average of steps in weekdays (`r mean(meanstep1)`).During some specific intervals,weekdays shows higher values than weekend ,such as during interval of 500 to 700.
+
+So indeed,there are differences in activity patterns between weekdays and weekends.
+
+
